@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.openftc.easyopencv.OpenCvCamera;
@@ -23,13 +24,20 @@ public class UPgrade_Autonom_A2 extends LinearOpMode {
     private PachetelNouOpenCV pipeline = new PachetelNouOpenCV();
     private double width, height;
     public double lastTime;
+    double sm = 1, ms = 2;
+    double pidResult;
     DcMotorEx motorFR, motorFL, motorBR, motorBL;
+    private DcMotorEx sliderST,armST;
+    private DcMotorEx sliderDR,armDR;
+    private Servo claw, excitator;
     MechShow m = new MechShow(true);
     String varrez = "Dreapta";
     static final double COUNTSPERR = 383.6;
     static final double GEARREDUCTION = 1;
     static final double DIAMROT = 9.6;
     static final double COUNTS_PER_CM = (COUNTSPERR*GEARREDUCTION) / (DIAMROT*3.1415);
+    Pid_Controller_Adevarat pid = new Pid_Controller_Adevarat(0.0,0.0,0.0);
+    private boolean stop=false,setSetpoint=false;
     //merge si pentru F5 acest autonom
     private double crThreshHigh = 150;
     private double crThreshLow = 120;
@@ -45,25 +53,49 @@ public class UPgrade_Autonom_A2 extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        motorBL = hardwareMap.get(DcMotorEx.class, "motorBL");
-        motorBR = hardwareMap.get(DcMotorEx.class, "motorBR");
-        motorFL = hardwareMap.get(DcMotorEx.class, "motorFL");
-        motorFR = hardwareMap.get(DcMotorEx.class, "motorFR");
+        pid.enable();
+        telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
+        motorBL = hardwareMap.get(DcMotorEx.class, "motorBL"); // Motor Back-Left
+        motorBR = hardwareMap.get(DcMotorEx.class, "motorBR"); // Motor Back-Right
+        motorFL = hardwareMap.get(DcMotorEx.class, "motorFL"); // Motor Front-Left
+        motorFR = hardwareMap.get(DcMotorEx.class, "motorFR"); // Motor Front-Right
+        sliderST = hardwareMap.get(DcMotorEx.class, "slider");
+        sliderDR = hardwareMap.get(DcMotorEx.class, "slider2");
+        armST = hardwareMap.get(DcMotorEx.class, "arm");
+        armDR = hardwareMap.get(DcMotorEx.class, "arm2");
+        claw = hardwareMap.servo.get("claw");
 
-        motorBL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        motorBR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        motorFL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        motorFR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-
-        motorBL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        motorBR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        motorFL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        motorFR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        excitator = hardwareMap.servo.get("excitator");
 
         motorBL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorBR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorFL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorFR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        sliderST.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        sliderDR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        armST.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        armDR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        motorFR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motorFL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motorBR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motorBL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
+        sliderST.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        sliderDR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        armST.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        armDR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
+        motorFR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        motorFL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        motorBR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        motorBL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        sliderST.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        sliderDR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        armST.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        armDR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         telemetry = new MultipleTelemetry(FtcDashboard.getInstance().getTelemetry(), telemetry);
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
@@ -110,6 +142,7 @@ public class UPgrade_Autonom_A2 extends LinearOpMode {
         }
         telemetry.update();
         Autonom.start();
+        pdi.start();
         while (!isStopRequested()) {
 
         }
@@ -118,27 +151,59 @@ public class UPgrade_Autonom_A2 extends LinearOpMode {
         @Override
         public void run() {
             if(varrez=="Stanga"&&!isStopRequested()) {
-                m.fata(0.2,60);
+                Translatare(-130,0,0.5);
                 kdf(200);
-                /*Translatare(-130,0,0.5);
-                kdf(200);
-                Translatare(0,245,0.5);*/
+                Translatare(0,245,0.5);
             }
 
             if(varrez == "Mijloc"&&!isStopRequested()) {
-                /*Translatare(-130,0,0.5);
+                Translatare(-130,0,0.5);
                 kdf(200);
                 Translatare(0,245,0.5);
                 kdf(600);
-                Translatare(130,0,0.5);*/
+                Translatare(130,0,0.5);
             }
 
             if(varrez == "Dreapta"&&!isStopRequested()) {
-                /*Translatare(-130,0,0.5);
+                Translatare(-130,0,0.5);
                 kdf(200);
                 Translatare(0,245,0.5);
                 kdf(600);
-                Translatare(260,0,0.5);*/
+                Translatare(260,0,0.5);
+            }
+        }
+    });
+    private final Thread pdi = new Thread(new Runnable() {
+        @Override
+        public void run() {
+            pid.setPID(constants.kp,constants.ki,constants.kd);
+            //pidslider.setPID(constants.p,constants.i,constants.d);
+            while (!stop) {
+                if(gamepad2.right_bumper){
+                    ms = 2;
+                }
+                else if (gamepad2.left_bumper) {
+                    ms = 5;
+                }
+                else{
+                    ms = 0.5;
+                }
+                if(gamepad2.left_stick_y != 0.0){
+                    armST.setPower(gamepad1.left_stick_y / ms);
+                    armDR.setPower(-gamepad2.left_stick_y / ms);
+                    //arm.setPower(gamepad1.left_trigger / ms);
+                    //arm2.setPower(-gamepad1.left_trigger / ms);
+                    setSetpoint = true;
+                }
+                else {
+                    if (setSetpoint) {
+                        pid.setSetpoint(armST.getCurrentPosition());
+                        setSetpoint = false;
+                    }
+                    pidResult = pid.performPID(armST.getCurrentPosition());
+                    armST.setPower(pidResult);
+                    armDR.setPower(-pidResult);
+                }
             }
         }
     });

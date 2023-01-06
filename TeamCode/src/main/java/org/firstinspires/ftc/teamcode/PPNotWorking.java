@@ -37,21 +37,20 @@ public class PPNotWorking extends OpMode{
     private DcMotorEx motorBR;
     private DcMotorEx motorFL;
     private DcMotorEx motorFR;
-    private DcMotorEx slider,arm;
-    private DcMotorEx slider2,arm2;
-    private Servo claw;
-    private TouchSensor touchy;
+    private DcMotorEx sliderST,armST;
+    private DcMotorEx sliderDR,armDR;
+    private Servo claw, excitator;
     double sm = 1, ms = 2;
     double poz = 0;
     double gpoz = 0.5;
     private BNO055IMU imu;
     double y, x, rx;
-    double sliderPower,sliderPos;
+    double sliderPos;
     double max = 0;
     double pmotorBL;
     double pmotorBR;
     double pmotorFL;
-    double pmotorFR;
+    double pmotorFR, clawPosition = 0.0, exPosition = 0.0;
     double lastTime, pidResult, pidpidResult;
     private boolean alast = false;
     float right_stick2;
@@ -74,7 +73,6 @@ public class PPNotWorking extends OpMode{
     int loaderState = -1;
     private int apoz = 0;
     Pid_Controller_Adevarat pid = new Pid_Controller_Adevarat(0.0,0.0,0.0);
-    Pid_Controller_Adevarat pidslider = new Pid_Controller_Adevarat(0.0,0.0,0.0);
     private long spasmCurrentTime = 0;
     private long pidTime = 0;
     public double difference,medie;
@@ -84,18 +82,18 @@ public class PPNotWorking extends OpMode{
     private double forward, right, clockwise;
     public void init() {
         pid.enable();
-        pidslider.enable();
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
         motorBL = hardwareMap.get(DcMotorEx.class, "motorBL"); // Motor Back-Left
         motorBR = hardwareMap.get(DcMotorEx.class, "motorBR"); // Motor Back-Right
         motorFL = hardwareMap.get(DcMotorEx.class, "motorFL"); // Motor Front-Left
         motorFR = hardwareMap.get(DcMotorEx.class, "motorFR"); // Motor Front-Right
-        slider = hardwareMap.get(DcMotorEx.class, "slider");
-        slider2 = hardwareMap.get(DcMotorEx.class, "slider2");
-        arm = hardwareMap.get(DcMotorEx.class, "arm");
-        arm2 = hardwareMap.get(DcMotorEx.class, "arm2");
+        sliderST = hardwareMap.get(DcMotorEx.class, "slider");
+        sliderDR = hardwareMap.get(DcMotorEx.class, "slider2");
+        armST = hardwareMap.get(DcMotorEx.class, "arm");
+        armDR = hardwareMap.get(DcMotorEx.class, "arm2");
         claw = hardwareMap.servo.get("claw");
-        touchy = hardwareMap.get(TouchSensor.class, "touchy");
+
+        excitator = hardwareMap.servo.get("excitator");
         imu = hardwareMap.get(BNO055IMU.class, "imu");
         BNO055IMU.Parameters parameters = new BNO055IMU.Parameters();
         parameters.angleUnit = BNO055IMU.AngleUnit.DEGREES;
@@ -109,30 +107,32 @@ public class PPNotWorking extends OpMode{
         motorFL.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorFR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        slider.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        slider2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        arm.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        arm2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        sliderST.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        sliderDR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        armST.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        armDR.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         motorFR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         motorFL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         motorBR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         motorBL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
 
-        slider.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        slider2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        arm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        arm2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        sliderST.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        sliderDR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        armST.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        armDR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
 
         motorFR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         motorFL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         motorBR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         motorBL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        slider.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        slider2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        arm.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        arm2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        sliderST.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        sliderDR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        armST.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        armDR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        sliderPos = sliderDR.getCurrentPosition();
 
         telemetry.addData("Status", "Initialized");
         telemetry.addData("Resseting", "Encoders");
@@ -251,72 +251,28 @@ public class PPNotWorking extends OpMode{
     private final Thread Systems = new Thread(new Runnable() {
         @Override
         public void run() {
-            arm.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(constants.parm, constants.iarm, constants.darm, 0.0));
-            arm2.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(constants.parm, constants.iarm, constants.darm, 0.0));
-            slider.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(constants.pslider, constants.islider, constants.dslider, 0.0));
-            slider2.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(constants.pslider, constants.islider, constants.dslider, 0.0));
+            pid.setPID(constants.kp,constants.ki,constants.kd);
+            //slider.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(constants.pslider, constants.islider, constants.dslider, 0.0));
+            //slider2.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(constants.pslider, constants.islider, constants.dslider, 0.0));
             while (!stop) {
-                //slider.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, new PIDFCoefficients(constants.p, constants.i, constants.d, constants.f));
-                /*if(gamepad2.b) {
-                    slider.setTargetPosition(-1680);
-                    slider.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                    slider.setPower(0.7);
-                    while (slider.isBusy() && ok1 == true) ;
-                    slider.setPower(0);
-                    slider.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                }*/
-                /*if(gamepad2.x) {
-                    slider.setTargetPosition(0);
-                    slider.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                    slider.setPower(0.3);
-                    while (slider.isBusy()&&ok1==true) ;
-                    slider.setPower(0);
-                    slider.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                }*/
-
-                if(gamepad2.right_bumper)
-                    ms = 2;
-                else if (gamepad2.left_bumper)
-                    ms = 5;
-                else ms = 0.5;
-
-                /*if (gamepad2.a)
-                {claw.setPosition(0.0);
-
-                }
-                if (gamepad2.y)
-                    claw.setPosition(0.4);*/
-                boolean a=gamepad2.a;
+                /*boolean a=gamepad2.a;
                 if(a!=alast){
                     cn++;
-                }
-                cn=cn/2;
-                alast = a;
-                if(cn%2==1){
-                    claw.setPosition(1);
-                }
+                }*/
+                //cn=cn/2;
+                //alast = a;
+                //if(cn%2==1){
+                    excitator.setPosition(gamepad2.right_trigger * 10) ;
+               /* }
                 else if(cn%2==0){
-                    claw.setPosition(0);
-                }
-                if (touchy.isPressed()) {
-                    touch=true;
-                    slider.setTargetPosition(0);
-                    slider2.setTargetPosition(0);
-                    slider.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                    slider2.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                    slider.setPower(0.7);
-                    slider2.setPower(0.7);
-                    while (slider.isBusy() && ok1 == true) ;
-                    slider.setPower(0);
-                    slider.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                    while (slider2.isBusy() && ok1 == true) ;
-                    slider2.setPower(0);
-                    slider2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                }
+                    excitator.setPosition(0);
+                }*/
 
-                else { // Otherwise, run the motor
-                    touch=false;
-                }
+                claw.setPosition(gamepad2.left_trigger);
+
+                sliderST.setPower(-gamepad2.right_stick_y / ms);
+                sliderDR.setPower(gamepad2.right_stick_y / ms);
+
             }
         }
     });
@@ -324,7 +280,7 @@ public class PPNotWorking extends OpMode{
         @Override
         public void run() {
             pid.setPID(constants.kp,constants.ki,constants.kd);
-            pidslider.setPID(constants.p,constants.i,constants.d);
+            //pidslider.setPID(constants.p,constants.i,constants.d);
             while (!stop) {
                 if(gamepad2.right_bumper){
                     ms = 2;
@@ -336,50 +292,44 @@ public class PPNotWorking extends OpMode{
                     ms = 0.5;
                 }
                 if(gamepad2.left_stick_y != 0.0){
-                    arm.setPower(gamepad2.left_stick_y / ms);
-                    arm2.setPower(-gamepad2.left_stick_y / ms);
+                    armST.setPower(gamepad2.left_stick_y / ms);
+                    armDR.setPower(-gamepad2.left_stick_y / ms);
+                    //arm.setPower(gamepad1.left_trigger / ms);
+                    //arm2.setPower(-gamepad1.left_trigger / ms);
                     setSetpoint = true;
                 }
                 else {
                     if (setSetpoint) {
-                        pid.setSetpoint(arm.getCurrentPosition());
+                        pid.setSetpoint(armST.getCurrentPosition());
                         setSetpoint = false;
                     }
-                    pidResult = pid.performPID(arm.getCurrentPosition());
-                    arm.setPower(pidResult);
-                    arm2.setPower(-pidResult);
-                }
-                if(gamepad2.right_stick_y != 0.0){
-                    slider.setPower(gamepad2.right_stick_y / ms);
-                    slider2.setPower(-gamepad2.right_stick_y / ms);
-                    setsetSetpoint = true;
-                }
-                else {
-                    if (setsetSetpoint) {
-                        pidslider.setSetpoint(slider.getCurrentPosition());
-                        setsetSetpoint = false;
-                    }
-                    pidpidResult = pidslider.performPID(slider.getCurrentPosition());
-                    slider.setPower(pidpidResult);
-                    slider2.setPower(-pidpidResult);
+                    pidResult = pid.performPID(armST.getCurrentPosition());
+                    armST.setPower(pidResult);
+                    armDR.setPower(-pidResult);
                 }
             }
         }
     });
     public void stop(){stop = true;}
     public void loop(){
-        telemetry.addData("Left Bumper", gamepad1.left_bumper);
-        telemetry.addData("Pozitie slider", slider.getCurrentPosition());
-        telemetry.addData("Pozitie slider2", slider2.getCurrentPosition());
+        telemetry.addData("Left Bumper", setSetpoint);
+        telemetry.addData("excitator", gamepad2.left_trigger);
+        telemetry.addData("Pozitie sliderST", sliderST.getCurrentPosition());
+        telemetry.addData("Pozitie sliderDR", sliderDR.getCurrentPosition());
         telemetry.addData("Controller Values slider:", gamepad2.right_stick_y);
         telemetry.addData("Controller Values arm:", gamepad2.left_stick_y);
-        telemetry.addData("Poz: ", poz);
+        telemetry.addData("Poz: ", gamepad2.left_stick_y / ms);
         telemetry.addData("touch ", touch);
-        telemetry.addData("inchis: ", cn);
-        telemetry.addData("permisie: ", permisie);
+        telemetry.addData("inchis: ", armST.getCurrentPosition());
+        telemetry.addData("permisie: ", armDR.getCurrentPosition());
         telemetry.addData("asdf: ", gamepad1.right_stick_y);
         telemetry.addData("thread: ", stop);
         telemetry.addData("ghera: ", claw.getPosition());
+        telemetry.addData( "errorarmstationary:",pid.getError());
+        telemetry.addData( "setpointarmstationary:",pid.getSetpoint());
+        telemetry.addData( "perror:",pid.getError());
+        telemetry.addData( "isum:",pid.getISum());
+        telemetry.addData( "derror:",pid.getDError());
         telemetry.update();
     }
     public void POWER(double df1, double sf1, double ds1, double ss1){
